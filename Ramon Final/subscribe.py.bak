@@ -1,0 +1,44 @@
+import numpy as np
+from cortex import Cortex
+from multiprocessing import Process,Queue,Pipe
+
+class Subscribe():
+	def __init__(self, user, debug=False):
+		self.user = user
+		self.c = Cortex(user, debug_mode=debug)
+		self.c.do_prepare_steps()
+
+	def establish_pipe(self, streams):
+		parent_conn,child_conn = Pipe()
+		p = Process(target=self.c.sub_request_mod, args=(child_conn,streams,))
+		p.start()
+		while True:
+			eeg_d, pow_d = parent_conn.recv()
+			print(len(eeg_d),len(pow_d))
+			self.process_data(eeg_d,pow_d)
+
+	def process_data(self, eeg, pow_d):
+		raw_eeg = np.stack(eeg)
+		min_f = np.min(raw_eeg, axis=0)
+		max_f = np.max(raw_eeg, axis=0)
+		avg_f = np.mean(raw_eeg, axis=0)
+		var_f = np.var(raw_eeg, axis=0)
+		med_f = np.median(raw_eeg, axis=0)
+		rest = np.stack(pow_d)
+		rest = np.mean(rest,axis=0)
+		features = np.concatenate([min_f,max_f,avg_f,var_f,med_f,rest])
+
+
+	def subscribe_print(self, streams):
+		self.c.sub_request(streams)
+
+
+user = {'license': 'a718b5f2-3470-4a0c-9862-0420ff78434b',
+					'client_id': 'r9P9TKzrQ0bSpbNhO9eRGbFsHDS8w6ug1bYXRF34', 
+					'client_secret': 'FhoWv8IRoiMIfkZapaHsVUTGvoExbeCNBMoSwfEcSk9KaLehjc7RqYxcnBBwwveOsRyWY9OJsHdrL4I1OUEU3AmkWwgGJjKYYQfYrArceo6VXI328PwZMshOw24cEm6c',
+					'debit': 100}
+streams = ['eeg', 'pow']
+
+s = Subscribe(user, debug=True)
+# s.subscribe_print(streams)
+s.establish_pipe(streams)
